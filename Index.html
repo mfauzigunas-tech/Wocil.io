@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Website Mewarnai Hewan</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            touch-action: none; 
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .menu-bar {
+            margin-bottom: 15px;
+            background-color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+        .menu-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        select {
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        #zoomText {
+            font-weight: bold;
+            font-size: 14px;
+            background-color: #eee;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: #555;
+        }
+        #uploadBtn {
+            background-color: #9C27B0;
+            color: white;
+            border-color: #9C27B0;
+            padding: 8px 15px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #scroll-wrapper {
+            width: 350px;
+            height: 400px;
+            border: 2px solid #333;
+            background-color: #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 350px;
+            height: 400px;
+            background-color: white;
+            transform-origin: top left;
+        }
+        /* Kanvas mewarnai berada di paling bawah */
+        #drawingCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: crosshair;
+        }
+        /* Elemen gambar ditaruh di atas kanvas dengan trik CSS Multiply */
+        #outlineImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none; /* Jari Anda akan otomatis menembus gambar ini ke kanvas */
+            mix-blend-mode: multiply; /* Membuat warna putih/transparan gambar jadi bening kaca */
+            display: none; /* Hanya muncul jika gambar dipilih/diunduh */
+            object-fit: contain;
+        }
+        .tools {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 350px;
+        }
+        .brush-size-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #fff;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .brush-size-container label {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .brush-size-container input {
+            flex: 1;
+        }
+        button, input[type="color"] {
+            padding: 10px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: white;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #e0e0e0;
+        }
+        .active-tool {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+        #saveBtn {
+            background-color: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Ayo Mewarnai!</h1>
+
+    <div class="menu-bar">
+        <div class="menu-row">
+            <div>
+                <label for="animalSelect"><strong>Gambar: </strong></label>
+                <select id="animalSelect">
+                    <option value="none">Kosong</option>
+                    <option value="cat">Kucing (Bawaan)</option>
+                    <option value="bear">Beruang</option>
+                </select>
+            </div>
+            <span id="zoomText">Zoom: 100%</span>
+        </div>
+        
+        <button id="uploadBtn">📁 Unggah dari Galeri</button>
+        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+    </div>
+
+    <div id="scroll-wrapper">
+        <div id="canvas-container">
+            <canvas id="drawingCanvas" width="350" height="400"></canvas>
+            <img id="outlineImage" alt="Sketsa Hewan">
+        </div>
+    </div>
+
+    <div class="tools">
+        <div class="brush-size-container">
+            <label for="brushSize">Ukuran:</label>
+            <input type="range" id="brushSize" min="2" max="50" value="10">
+        </div>
+
+        <input type="color" id="colorPicker" value="#8B4513" title="Pilih Warna Kuas">
+        <button id="brushBtn" class="active-tool">Kuas</button>
+        <button id="eraserBtn">Penghapus</button>
+        <button id="clearBtn">Bersihkan</button>
+        <button id="saveBtn">Simpan</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const outlineImage = document.getElementById('outlineImage');
+
+        const colorPicker = document.getElementById('colorPicker');
+        const brushBtn = document.getElementById('brushBtn');
+        const eraserBtn = document.getElementById('eraserBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const animalSelect = document.getElementById('animalSelect');
+        const brushSize = document.getElementById('brushSize');
+        
+        const uploadBtn = document.getElementById('uploadBtn');
+        const imageUpload = document.getElementById('imageUpload');
+        
+        const canvasContainer = document.getElementById('canvas-container');
+        const zoomText = document.getElementById('zoomText');
+
+        let isDrawing = false;
+        let isErasing = false;
+
+        let zoomScale = 1.0;
+        let initialDistance = 0;
+        let initialScale = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let startPanX = 0;
+        let startPanY = 0;
+        let initialMidX = 0;
+        let initialMidY = 0;
+
+        // Set latar belakang kanvas jadi putih bersih
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.lineWidth = brushSize.value; 
+        ctx.lineCap = 'round';
+
+        const animalsData = {
+            cat: `data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="350" height="400" viewBox="0 0 350 400"><g transform="translate(75, 100)"><polygon points="40,90 30,20 90,50" fill="none" stroke="black" stroke-width="5"/><polygon points="160,90 170,20 110,50" fill="none" stroke="black" stroke-width="5"/><circle cx="100" cy="110" r="70" fill="none" stroke="black" stroke-width="5"/><circle cx="75" cy="95" r="10" fill="black"/><circle cx="125" cy="95" r="10" fill="black"/><polygon points="90,115 110,115 100,125" fill="black"/><path d="M 85 130 Q 100 145 115 130" fill="none" stroke="black" stroke-width="3"/></g></svg>`,
+            bear: `data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="350" height="400" viewBox="0 0 350 400"><g transform="translate(75, 100)"><circle cx="50" cy="50" r="25" fill="none" stroke="black" stroke-width="5"/><circle cx="150" cy="50" r="25" fill="none" stroke="black" stroke-width="5"/><circle cx="100" cy="110" r="75" fill="none" stroke="black" stroke-width="5"/><circle cx="70" cy="90" r="8" fill="black"/><circle cx="130" cy="90" r="8" fill="black"/><ellipse cx="100" cy="130" rx="30" ry="20" fill="none" stroke="black" stroke-width="3"/><ellipse cx="100" cy="120" rx="10" ry="5" fill="black"/></g></svg>`
+        };
+
+        function loadAnimal(animalKey) {
+            if (animalKey === 'none' || !animalsData[animalKey]) {
+                outlineImage.style.display = 'none';
+                outlineImage.src = '';
+            } else {
+                outlineImage.src = animalsData[animalKey];
+                outlineImage.style.display = 'block';
+            }
+        }
+
+        animalSelect.addEventListener('change', (e) => {
+            loadAnimal(e.target.value);
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            resetZoom();
+        });
+
+        // --- UNGGAH GAMBAR DARI GALERI HP ---
+        uploadBtn.addEventListener('click', () => {
+            imageUpload.click();
+        });
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    outlineImage.src = event.target.result;
+                    outlineImage.style.display = 'block';
+
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    animalSelect.value = "none";
+                    resetZoom();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function resetZoom() {
+            zoomScale = 1.0;
+            panX = 0;
+            panY = 0;
+            applyTransform();
+        }
+
+        brushSize.addEventListener('input', (e) => {
+            ctx.lineWidth = e.target.value;
+        });
+
+        function applyTransform() {
+            const maxPanX = 0;
+            const minPanX = 350 - (350 * zoomScale);
+            const maxPanY = 0;
+            const minPanY = 400 - (400 * zoomScale);
+
+            panX = Math.max(minPanX, Math.min(maxPanX, panX));
+            panY = Math.max(minPanY, Math.min(maxPanY, panY));
+
+            canvasContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            zoomText.innerText = `Zoom: ${Math.round(zoomScale * 100)}%`;
+        }
+
+        function getDistance(t1, t2) {
+            return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        }
+
+        function getPosition(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function startDrawing(e) {
+            if (e.touches && e.touches.length === 2) {
+                isDrawing = false;
+                initialDistance = getDistance(e.touches[0], e.touches[1]);
+                initialScale = zoomScale;
+                initialMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                initialMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                startPanX = panX;
+                startPanY = panY;
+                e.preventDefault();
+                return;
+            }
+
+            if (e.touches && e.touches.length > 2) return;
+
+            isDrawing = true;
+            const pos = getPosition(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            if (!isErasing) ctx.strokeStyle = colorPicker.value;
+            if (e.type === 'touchstart') e.preventDefault();
+        }
+
+        function draw(e) {
+            if (e.touches && e.touches.length === 2) {
+                isDrawing = false;
+                const currentDistance = getDistance(e.touches[0], e.touches[1]);
+                if (initialDistance > 0) {
+                    const factor = currentDistance / initialDistance;
+                    zoomScale = Math.max(1.0, Math.min(4.0, initialScale * factor));
+                }
+                const currentMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                panX = startPanX + (currentMidX - initialMidX);
+                panY = startPanY + (currentMidY - initialMidY);
+                applyTransform();
+                e.preventDefault();
+                return;
+            }
+
+            if (!isDrawing) return;
+
+            const pos = getPosition(e);
+            ctx.strokeStyle = isErasing ? "white" : colorPicker.value;
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            if (e.type === 'touchmove') e.preventDefault();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing); 
+
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+
+        colorPicker.addEventListener('input', (e) => {
+            if (!isErasing) ctx.strokeStyle = e.target.value;
+        });
+
+        brushBtn.addEventListener('click', () => {
+            isErasing = false;
+            brushBtn.classList.add('active-tool');
+            eraserBtn.classList.remove('active-tool');
+        });
+
+        eraserBtn.addEventListener('click', () => {
+            isErasing = true;
+            eraserBtn.classList.add('active-tool');
+            brushBtn.classList.remove('active-tool');
+        });
+
+        clearBtn.addEventListener('click', () => {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // PROSES PENYIMPANAN YANG AMAN DARI BLOKIRAN KEAMANAN HP (CORS)
+        saveBtn.addEventListener('click', () => {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 1. Gambar hasil mewarnai Anda
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            // 2. Gambar sketsa kucing di atasnya secara aman menggunakan elemen HTML Image langsung
+            if (outlineImage.style.display !== 'none' && outlineImage.src) {
+                tempCtx.save();
+                tempCtx.globalCompositeOperation = 'multiply';
+                tempCtx.drawImage(outlineImage, 0, 0, canvas.width, canvas.height);
+                tempCtx.restore();
+            }
+            
+            const dataURL = tempCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'karya-mewarnai.png';
+            link.click();
+        });
+    </script>
+</body>
+</html>
